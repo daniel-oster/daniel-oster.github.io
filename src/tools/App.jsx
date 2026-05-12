@@ -1,5 +1,35 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+const css = `
+:root{
+  --bg:#f7f5f1;--text:#2d2a26;--muted:#999;--faint:#bbb;
+  --card:#fff;--card-b:#e8e4de;--card-hb:#f0ede8;
+  --tab:#fff;--tab-t:#555;--bar:#e0ddd8;--ptrack:#f0ede8;
+  --legend:#fff;--pb-bg:#fff8e6;--pb-bdr:#f0dfa0;
+  --row-p:#e8eaf6;--row-w:#fff0ed;--row-r:#e8f8ec;
+  --row-ck:#f5f4f1;--row-ws:#fef8f7;--row-d:#fff;
+  --dp:#dde0f5;--dw:#fde2dc;--dr:#d4f0da;--dt:#333;
+  --chk:#d0cdc8;--exp:#bbb;--tmeta:#999;
+  --cwu:#fef7e6;--cws:#fce8e6;--cmob:#e8f5ec;--cstr:#fde8db;--ccd:#f0ecf6;
+  --tbm:#ddf0e3;--tbs:#fde0ce;
+  --ptag:#e8eaf6;--ptag-t:#3949ab;
+}
+:root.dark{
+  --bg:#181614;--text:#e0dbd4;--muted:#666;--faint:#444;
+  --card:#242220;--card-b:#3a3835;--card-hb:#2e2c28;
+  --tab:#2a2825;--tab-t:#aaa;--bar:#3a3835;--ptrack:#2e2c28;
+  --legend:#242220;--pb-bg:#261e08;--pb-bdr:#4a3c10;
+  --row-p:#1a1c30;--row-w:#281210;--row-r:#0c2016;
+  --row-ck:#1c1a16;--row-ws:#1e1816;--row-d:#242220;
+  --dp:#1a1c30;--dw:#281210;--dr:#0c2016;--dt:#c8c0b8;
+  --chk:#4a4845;--exp:#555;--tmeta:#666;
+  --cwu:#261e08;--cws:#2a1510;--cmob:#0e2418;--cstr:#261508;--ccd:#1a1530;
+  --tbm:#0e2820;--tbs:#2a1808;
+  --ptag:#1a1c30;--ptag-t:#7986cb;
+}
+body{background:var(--bg);}
+`;
+
 const D = {
 march:"Stå rakt, marschera på stället med knäna till bekväm höjd. Svinga armarna naturligt. Andas in genom näsan, ut genom munnen.",
 ankleC:"Stå på ett ben nära vägg/stol. Lyft andra foten, rotera vristen — 5 varv medsols, 5 motsols. Byt ben.",
@@ -175,15 +205,15 @@ const WKS = [
 ];
 
 const CC = {
-warmup:{emoji:"🔥",color:"#b07d10",bg:"#fef7e6",label:"Uppvärmning"},
-wallsquat:{emoji:"🧱",color:"#b5362a",bg:"#fce8e6",label:"Wall squat"},
-mobility:{emoji:"🌿",color:"#2e7d4f",bg:"#e8f5ec",label:"Rörlighet"},
-strength:{emoji:"💪",color:"#d45b12",bg:"#fde8db",label:"Styrka"},
-cooldown:{emoji:"🧊",color:"#7b68ae",bg:"#f0ecf6",label:"Nedvarvning"},
+warmup:{emoji:"🔥",color:"#b07d10",bg:"var(--cwu)",label:"Uppvärmning"},
+wallsquat:{emoji:"🧱",color:"#b5362a",bg:"var(--cws)",label:"Wall squat"},
+mobility:{emoji:"🌿",color:"#2e7d4f",bg:"var(--cmob)",label:"Rörlighet"},
+strength:{emoji:"💪",color:"#d45b12",bg:"var(--cstr)",label:"Styrka"},
+cooldown:{emoji:"🧊",color:"#7b68ae",bg:"var(--ccd)",label:"Nedvarvning"},
 };
 const TB = {
-mobility:{emoji:"🧱🌿",color:"#2e7d4f",bg:"#ddf0e3",label:"Wall squat & Rörlighet"},
-strength:{emoji:"⚡",color:"#d45b12",bg:"#fde0ce",label:"Styrka"},
+mobility:{emoji:"🧱🌿",color:"#2e7d4f",bg:"var(--tbm)",label:"Wall squat & Rörlighet"},
+strength:{emoji:"⚡",color:"#d45b12",bg:"var(--tbs)",label:"Styrka"},
 };
 
 function buildSeq(day) {
@@ -210,13 +240,31 @@ export default function App() {
   const [wk, setWk] = useState(0);
   const [loading, setLoading] = useState(true);
   const [T, setT] = useState(null);
+  // Read dark pref synchronously to avoid flash
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem("wt4-dark") === "1"; } catch(e) { return false; }
+  });
   const tRef = useRef(null);
   const aRef = useRef(null);
 
   useEffect(() => {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
   },[]);
+
+  // Sync dark class to <html> so CSS vars cascade to body too
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
   const save=useCallback(async n=>{try{await window.storage.set("wt4-ck",JSON.stringify(n));}catch(e){}},[]);
+
+  const toggleDark = useCallback(() => {
+    setDark(d => {
+      const nd = !d;
+      try { window.storage.set("wt4-dark", nd ? "1" : ""); } catch(e) {}
+      return nd;
+    });
+  }, []);
 
   const tog=(w,d,eid)=>{const k=`${w}-${d}-${eid}`;setCk(p=>{const n={...p,[k]:!p[k]};save(n);return n;});};
   const togE=id=>setExp(p=>({...p,[id]:!p[id]}));
@@ -274,14 +322,23 @@ export default function App() {
   function wp(wi){let tot=0,dn=0;WKS[wi].days.forEach((d,di)=>{[...WU,...d.exercises,...CD].forEach(e=>{tot++;if(ck[`${wi}-${di}-${e.id}`])dn++;});});return{tot,dn,pct:tot?Math.round(dn/tot*100):0};}
   function dp(wi,di){const a=[...WU,...WKS[wi].days[di].exercises,...CD];let dn=0;a.forEach(e=>{if(ck[`${wi}-${di}-${e.id}`])dn++;});return{tot:a.length,dn,pct:a.length?Math.round(dn/a.length*100):0};}
 
-  if(loading) return <div style={{padding:40,textAlign:"center",fontFamily:"'DM Sans',sans-serif",color:"#888"}}>Laddar…</div>;
+  if(loading) return <div style={{padding:40,textAlign:"center",fontFamily:"'DM Sans',sans-serif",color:"var(--muted)"}}>Laddar…</div>;
 
   const week=WKS[wk]; const wProg=wp(wk);
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f7f5f1",minHeight:"100vh",color:"#2d2a26",paddingBottom:40}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",paddingBottom:40}}>
+      <style>{css}</style>
+
       <div style={{background:"linear-gradient(135deg,#8b2e1e,#b5362a 50%,#c44a3e)",padding:"24px 20px 18px",color:"white"}}>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:"0 0 4px",fontWeight:600}}>Träningsprogrammet</h1>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:"0 0 4px",fontWeight:600}}>Träningsprogrammet</h1>
+          <button
+            onClick={toggleDark}
+            title={dark ? "Ljust tema" : "Mörkt tema"}
+            style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"pointer",lineHeight:1,marginLeft:8,flexShrink:0}}
+          >{dark ? "☀️" : "🌙"}</button>
+        </div>
         <p style={{margin:"0 0 10px",opacity:.8,fontSize:13}}>3 dagar/vecka · 4 veckor · med timer</p>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {["🧱 Wall squats (BP)","🌿 Rörlighet","💪 Styrka"].map(t=>(<span key={t} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:"rgba(255,255,255,.15)"}}>{t}</span>))}
@@ -290,7 +347,7 @@ export default function App() {
 
       <div style={{display:"flex",gap:6,padding:"12px 16px 8px",overflowX:"auto"}}>
         {WKS.map((w,i)=>{const p=wp(i);const a=i===wk;return(
-          <button key={i} onClick={()=>{setWk(i);stop();}} style={{flex:"1 0 auto",padding:"10px 12px",borderRadius:10,border:"none",background:a?"#b5362a":"white",color:a?"white":"#555",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:a?"0 2px 8px rgba(181,54,42,.3)":"0 1px 3px rgba(0,0,0,.06)",minWidth:72}}>
+          <button key={i} onClick={()=>{setWk(i);stop();}} style={{flex:"1 0 auto",padding:"10px 12px",borderRadius:10,border:"none",background:a?"#b5362a":"var(--tab)",color:a?"white":"var(--tab-t)",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:a?"0 2px 8px rgba(181,54,42,.3)":"0 1px 3px rgba(0,0,0,.06)",minWidth:72}}>
             <div>V{w.num}</div><div style={{fontSize:10,opacity:.7,marginTop:1}}>{w.ph}</div>
             {p.dn>0&&<div style={{fontSize:10,marginTop:2}}>{p.pct}%</div>}
           </button>);
@@ -298,16 +355,16 @@ export default function App() {
       </div>
 
       <div style={{padding:"4px 16px 8px"}}>
-        <div style={{background:"#e0ddd8",borderRadius:6,height:6,overflow:"hidden"}}>
+        <div style={{background:"var(--bar)",borderRadius:6,height:6,overflow:"hidden"}}>
           <div style={{width:`${wProg.pct}%`,height:"100%",borderRadius:6,transition:"width .4s",background:wProg.pct===100?"#4caf50":"linear-gradient(90deg,#b5362a,#e06050)"}}/>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#999",marginTop:4}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--muted)",marginTop:4}}>
           <span>Vecka {week.num}: {wProg.dn}/{wProg.tot}</span>
           {wProg.dn>0&&<button onClick={()=>{if(confirm("Nollställ v"+week.num+"?"))resetW(wk);}} style={{background:"none",border:"none",color:"#c77",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Nollställ</button>}
         </div>
       </div>
 
-      {week.ph==="Progression"&&(<div style={{margin:"0 16px 8px",padding:"10px 14px",background:"#fff8e6",borderRadius:10,border:"1px solid #f0dfa0",fontSize:12,lineHeight:1.5}}><strong>📈 Progressionsvecka!</strong> Svårare varianter — se noter per pass.</div>)}
+      {week.ph==="Progression"&&(<div style={{margin:"0 16px 8px",padding:"10px 14px",background:"var(--pb-bg)",borderRadius:10,border:"1px solid var(--pb-bdr)",fontSize:12,lineHeight:1.5}}><strong>📈 Progressionsvecka!</strong> Svårare varianter — se noter per pass.</div>)}
 
       {week.days.map((day,di)=>{
         const dProg=dp(wk,di);const tb=TB[day.type];const done=dProg.pct===100;
@@ -315,14 +372,14 @@ export default function App() {
         const live=T&&T.dayIdx===di; const ar=activeRound();
 
         return(
-        <div key={di} style={{margin:"8px 16px 16px",background:"white",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,.06)",overflow:"hidden",border:done?"2px solid #4caf50":live?"2px solid #b5362a":"1px solid #e8e4de"}}>
-          <div style={{padding:"14px 16px 10px",borderBottom:"1px solid #f0ede8"}}>
+        <div key={di} style={{margin:"8px 16px 16px",background:"var(--card)",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,.06)",overflow:"hidden",border:done?"2px solid #4caf50":live?"2px solid #b5362a":"1px solid var(--card-b)"}}>
+          <div style={{padding:"14px 16px 10px",borderBottom:"1px solid var(--card-hb)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div><span style={{fontSize:11,fontWeight:600,color:"#999",textTransform:"uppercase",letterSpacing:.5}}>{day.label}</span>{done&&<span style={{marginLeft:8}}>✅</span>}</div>
+              <div><span style={{fontSize:11,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.5}}>{day.label}</span>{done&&<span style={{marginLeft:8}}>✅</span>}</div>
               <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:tb.bg,color:tb.color}}>{tb.emoji} {tb.label}</span>
             </div>
-            <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:400,margin:"4px 0 0"}}>
-              {day.title}<span style={{fontFamily:"'DM Sans'",fontSize:13,fontWeight:500,color:"#999",marginLeft:8}}>~{tMin} min</span>
+            <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:400,margin:"4px 0 0",color:"var(--text)"}}>
+              {day.title}<span style={{fontFamily:"'DM Sans'",fontSize:13,fontWeight:500,color:"var(--muted)",marginLeft:8}}>~{tMin} min</span>
             </h2>
             {day.prog&&<p style={{margin:"6px 0 0",fontSize:12,color:"#d45b12",fontWeight:500}}>↑ {day.prog}</p>}
 
@@ -332,13 +389,13 @@ export default function App() {
               ):(
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   <button onClick={pause} style={{padding:"8px 14px",borderRadius:8,border:"none",fontFamily:"inherit",fontSize:13,fontWeight:700,background:T.run?"#f0a030":"#2e7d4f",color:"white",cursor:"pointer"}}>{T.run?"⏸ Paus":"▶ Fortsätt"}</button>
-                  <button onClick={skip} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontFamily:"inherit",fontSize:12,background:"white",color:"#666",cursor:"pointer"}}>⏭</button>
-                  <button onClick={stop} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #ddd",fontFamily:"inherit",fontSize:12,background:"white",color:"#c55",cursor:"pointer"}}>⏹</button>
+                  <button onClick={skip} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--card-b)",fontFamily:"inherit",fontSize:12,background:"var(--card)",color:"var(--tab-t)",cursor:"pointer"}}>⏭</button>
+                  <button onClick={stop} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--card-b)",fontFamily:"inherit",fontSize:12,background:"var(--card)",color:"#c55",cursor:"pointer"}}>⏹</button>
                 </div>
               )}
-              <div style={{flex:1}}>{dProg.dn>0&&(<div style={{background:"#f0ede8",borderRadius:4,height:4}}><div style={{width:`${dProg.pct}%`,height:"100%",borderRadius:4,transition:"width .3s",background:done?"#4caf50":"#b5362a"}}/></div>)}</div>
+              <div style={{flex:1}}>{dProg.dn>0&&(<div style={{background:"var(--ptrack)",borderRadius:4,height:4}}><div style={{width:`${dProg.pct}%`,height:"100%",borderRadius:4,transition:"width .3s",background:done?"#4caf50":"#b5362a"}}/></div>)}</div>
             </div>
-            {live&&ar&&<div style={{marginTop:8,fontSize:13,fontWeight:700,color:"#b5362a",background:"#fce8e6",display:"inline-block",padding:"3px 10px",borderRadius:6}}>Runda {ar.r} av {ar.t}</div>}
+            {live&&ar&&<div style={{marginTop:8,fontSize:13,fontWeight:700,color:"#b5362a",background:"var(--cws)",display:"inline-block",padding:"3px 10px",borderRadius:6}}>Runda {ar.r} av {ar.t}</div>}
           </div>
 
           <div style={{padding:"6px 0"}}>
@@ -358,26 +415,26 @@ export default function App() {
         </div>);
       })}
 
-      <div style={{margin:"8px 16px",padding:"14px 16px",background:"white",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#999",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Färgkoder</div>
+      <div style={{margin:"8px 16px",padding:"14px 16px",background:"var(--legend)",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Färgkoder</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {Object.entries(CC).map(([k,v])=>(<span key={k} style={{fontSize:12,padding:"4px 10px",borderRadius:8,background:v.bg,color:v.color,fontWeight:500}}>{v.emoji} {v.label}</span>))}
-          <span style={{fontSize:12,padding:"4px 10px",borderRadius:8,background:"#e8eaf6",color:"#3949ab",fontWeight:500}}>⏳ Gör dig redo</span>
+          <span style={{fontSize:12,padding:"4px 10px",borderRadius:8,background:"var(--ptag)",color:"var(--ptag-t)",fontWeight:500}}>⏳ Gör dig redo</span>
         </div>
       </div>
-      <div style={{textAlign:"center",padding:"12px 16px",fontSize:11,color:"#bbb"}}>▶ Starta pass för automatisk timer · Instruktioner visas under övningen</div>
+      <div style={{textAlign:"center",padding:"12px 16px",fontSize:11,color:"var(--faint)"}}>▶ Starta pass för automatisk timer · Instruktioner visas under övningen</div>
     </div>
   );
 }
 
-function SL({cat,text,extra}){const c=CC[cat];return(<div style={{padding:"10px 16px 4px"}}><div style={{fontSize:10,fontWeight:700,color:c.color,textTransform:"uppercase",letterSpacing:1}}>{c.emoji} {text}</div>{extra&&<div style={{fontSize:11,color:"#999",marginTop:1}}>{extra}</div>}</div>);}
+function SL({cat,text,extra}){const c=CC[cat];return(<div style={{padding:"10px 16px 4px"}}><div style={{fontSize:10,fontWeight:700,color:c.color,textTransform:"uppercase",letterSpacing:1}}>{c.emoji} {text}</div>{extra&&<div style={{fontSize:11,color:"var(--muted)",marginTop:1}}>{extra}</div>}</div>);}
 
 function Row({ex,ck:checked,exp,onCk,onExp,act,tl,tot,rRef}){
   const c=CC[ex.cat];
   const isPrep=act==="prep",isWork=act==="work",isRest=act==="rest",isAct=!!act;
   const pct=isAct&&tot>0?(tl/tot)*100:0;
 
-  const bg=isPrep?"#e8eaf6":isWork?"#fff0ed":isRest?"#e8f8ec":checked?"#f5f4f1":ex.cat==="wallsquat"?"#fef8f7":"white";
+  const bg=isPrep?"var(--row-p)":isWork?"var(--row-w)":isRest?"var(--row-r)":checked?"var(--row-ck)":ex.cat==="wallsquat"?"var(--row-ws)":"var(--row-d)";
   const bc=isPrep?"#5c6bc0":isWork?"#e84c30":isRest?"#4caf50":c.color;
   const phLabel=isPrep?"GÖR DIG REDO":isWork?"KÖR":isRest?"VILA":null;
   const phColor=isPrep?"#3949ab":isWork?"#c0392b":"#27864a";
@@ -390,14 +447,14 @@ function Row({ex,ck:checked,exp,onCk,onExp,act,tl,tot,rRef}){
       {isAct&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:`${pct}%`,transition:"width 1s linear",background:isPrep?"rgba(92,107,188,.08)":isWork?"rgba(232,76,48,.08)":"rgba(76,175,80,.08)",zIndex:0,borderRadius:"0 8px 8px 0"}}/>}
 
       <div style={{display:"flex",alignItems:"flex-start",padding:"10px 10px 10px 12px",gap:10,position:"relative",zIndex:1}}>
-        <button onClick={e=>{e.stopPropagation();onCk();}} style={{width:24,height:24,minWidth:24,borderRadius:6,border:`2px solid ${checked?"#4caf50":"#d0cdc8"}`,background:checked?"#4caf50":"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:1,padding:0}}>
+        <button onClick={e=>{e.stopPropagation();onCk();}} style={{width:24,height:24,minWidth:24,borderRadius:6,border:`2px solid ${checked?"#4caf50":"var(--chk)"}`,background:checked?"#4caf50":"var(--card)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",marginTop:1,padding:0}}>
           {checked&&<span style={{color:"white",fontSize:14,lineHeight:1}}>✓</span>}
         </button>
 
         <div onClick={onExp} style={{flex:1,cursor:"pointer",minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:14}}>{c.emoji}</span>
-            <span style={{fontSize:14,fontWeight:ex.cat==="wallsquat"?700:600,textDecoration:checked&&!isAct?"line-through":"none",color:checked&&!isAct?"#aaa":isAct?phColor:ex.cat==="wallsquat"?"#b5362a":"#2d2a26"}}>{ex.name}</span>
+            <span style={{fontSize:14,fontWeight:ex.cat==="wallsquat"?700:600,textDecoration:checked&&!isAct?"line-through":"none",color:checked&&!isAct?"var(--muted)":isAct?phColor:ex.cat==="wallsquat"?"#b5362a":"var(--text)"}}>{ex.name}</span>
           </div>
 
           {isAct?(
@@ -409,19 +466,19 @@ function Row({ex,ck:checked,exp,onCk,onExp,act,tl,tot,rRef}){
               {isPrep&&<div style={{fontSize:12,color:"#5c6bc0",marginTop:4,fontWeight:500}}>Läs instruktionen och gör dig redo…</div>}
             </div>
           ):(
-            <div style={{fontSize:11,color:"#999",marginTop:2,marginLeft:20}}>
+            <div style={{fontSize:11,color:"var(--tmeta)",marginTop:2,marginLeft:20}}>
               {fmt(ex.ws)}{ex.rs>0?` + ${ex.rs}s vila`:""}
             </div>
           )}
 
           {showDesc&&(
-            <div style={{marginTop:8,padding:"10px 12px",borderRadius:8,background:isPrep?"#dde0f5":isWork?"#fde2dc":isRest?"#d4f0da":c.bg,fontSize:13,lineHeight:1.65,color:"#333",border:isAct?`1px solid ${bc}22`:"none"}}>
+            <div style={{marginTop:8,padding:"10px 12px",borderRadius:8,background:isPrep?"var(--dp)":isWork?"var(--dw)":isRest?"var(--dr)":c.bg,fontSize:13,lineHeight:1.65,color:"var(--dt)",border:isAct?`1px solid ${bc}22`:"none"}}>
               {ex.d}
             </div>
           )}
         </div>
 
-        {!isAct&&<button onClick={onExp} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#bbb",padding:4,marginTop:2,transform:exp?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}}>▼</button>}
+        {!isAct&&<button onClick={onExp} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"var(--exp)",padding:4,marginTop:2,transform:exp?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}}>▼</button>}
       </div>
     </div>
   );
