@@ -397,7 +397,7 @@ export default function App() {
       <div style={{background:"linear-gradient(135deg,#8b2e1e,#b5362a 50%,#c44a3e)",padding:"24px 20px 18px",color:"white"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <img src="/pressless-logo.png" alt="PressLess"
+            <img src="/pressless-logo.svg" alt="PressLess"
               style={{width:44,height:44,borderRadius:8,objectFit:"contain",mixBlendMode:"screen",flexShrink:0}} />
             <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:0,fontWeight:600}}>PressLess</h1>
           </div>
