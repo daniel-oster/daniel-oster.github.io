@@ -398,7 +398,7 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <img src="/pressless-logo.svg" alt="PressLess"
-              style={{width:44,height:44,borderRadius:8,objectFit:"contain",mixBlendMode:"screen",flexShrink:0}} />
+              style={{width:44,height:44,borderRadius:10,objectFit:"contain",flexShrink:0}} />
             <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:0,fontWeight:600}}>PressLess</h1>
           </div>
           <button

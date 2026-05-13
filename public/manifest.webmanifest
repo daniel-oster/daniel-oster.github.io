@@ -1,0 +1,18 @@
+{
+  "name": "PressLess",
+  "short_name": "PressLess",
+  "description": "4-week workout program with built-in timer",
+  "start_url": "/tools/",
+  "scope": "/tools/",
+  "display": "standalone",
+  "background_color": "#0D0B1A",
+  "theme_color": "#b5362a",
+  "icons": [
+    {
+      "src": "/pressless-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
