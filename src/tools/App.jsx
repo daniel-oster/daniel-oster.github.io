@@ -261,14 +261,47 @@ export default function App() {
   const [wk, setWk] = useState(0);
   const [loading, setLoading] = useState(true);
   const [T, setT] = useState(null);
+  const [isLandscape, setIsLandscape] = useState(false);
   const tRef = useRef(null);
   const aRef = useRef(null);
   const audioRef = useRef(null);
   const prevTRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   useEffect(() => {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
   },[]);
+
+  // Orientation detection
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape)");
+    setIsLandscape(mq.matches);
+    const handler = e => setIsLandscape(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Wake lock: keep screen on while session is active
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return;
+    async function acquire() {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+      } catch(e) {}
+    }
+    async function release() {
+      if (wakeLockRef.current) { try { await wakeLockRef.current.release(); } catch(e) {} wakeLockRef.current = null; }
+    }
+    if (T) {
+      acquire();
+    } else {
+      release();
+    }
+    // Re-acquire if page becomes visible again while session is active
+    function onVisible() { if (T && document.visibilityState === "visible") acquire(); }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { document.removeEventListener("visibilitychange", onVisible); };
+  }, [T]);
 
   const save=useCallback(async n=>{try{await window.storage.set("wt4-ck",JSON.stringify(n));}catch(e){}},[]);
 
@@ -383,9 +416,15 @@ export default function App() {
 
   const week=WKS[wk]; const wProg=wp(wk);
 
+  const showLandscapeOverlay = isLandscape && !!T;
+
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:"#0F0F14",minHeight:"100vh",color:"#F0EEF8",paddingBottom:60}}>
       <style>{css}</style>
+
+      {showLandscapeOverlay && (
+        <LandscapeOverlay T={T} onPause={pause} onSkip={skip} onStop={stop} />
+      )}
 
       {/* ── Header ── */}
       <div style={{background:"linear-gradient(160deg,#1A0A2E 0%,#0F1520 60%,#1A0A0E 100%)",padding:"32px 20px 24px"}}>
@@ -827,6 +866,101 @@ function Row({ex,ck:checked,exp,onCk,onExp,act,tl,tot,rRef}) {
             transform:exp?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s ease"
           }}>▼</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function LandscapeOverlay({T, onPause, onSkip, onStop}) {
+  const cur = T.seq[T.seqIdx];
+  const c = CC[cur.cat];
+  const isPrep = T.phase === "prep";
+  const isWork = T.phase === "work";
+  const phLabel = isPrep ? "GÖR DIG REDO" : isWork ? "KÖR" : "VILA";
+  const phColor = isPrep ? "#9B65FF" : isWork ? "#FF8C47" : "#22C55E";
+  const phBg    = isPrep ? "rgba(123,63,228,0.2)" : isWork ? "rgba(255,109,31,0.2)" : "rgba(34,197,94,0.2)";
+  const phBorder= isPrep ? "rgba(123,63,228,0.4)" : isWork ? "rgba(255,109,31,0.4)" : "rgba(34,197,94,0.4)";
+  const tot = isPrep ? PREP_SEC : isWork ? cur.ws : cur.rs;
+  const pct = tot > 0 ? (T.tl / tot) * 100 : 0;
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"#0F0F14",
+      display:"flex", flexDirection:"column",
+      justifyContent:"center", alignItems:"stretch",
+      padding:"16px 32px",
+      fontFamily:"'DM Sans',sans-serif",
+    }}>
+      {/* Progress bar at top */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"#1E1E2A"}}>
+        <div style={{
+          height:"100%", borderRadius:2,
+          width:`${pct}%`, transition:"width 1s linear",
+          background: isPrep ? "#9B65FF" : isWork ? "#FF8C47" : "#22C55E"
+        }}/>
+      </div>
+
+      {/* Phase badge */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+        <span style={{
+          fontSize:13, fontWeight:700, padding:"5px 16px", borderRadius:20,
+          background:phBg, color:phColor,
+          border:`1px solid ${phBorder}`,
+          fontFamily:"'JetBrains Mono',monospace", letterSpacing:"0.12em"
+        }}>{c.emoji} {phLabel}</span>
+        {isPrep && (
+          <span style={{fontSize:13,color:"#9B65FF",fontWeight:500}}>
+            Läs och gör dig redo…
+          </span>
+        )}
+      </div>
+
+      {/* Exercise name */}
+      <div style={{
+        fontFamily:"'Syne',sans-serif", fontSize:36, fontWeight:800,
+        color:"#F0EEF8", lineHeight:1.15, marginBottom:16,
+        letterSpacing:"-0.02em"
+      }}>{cur.name}</div>
+
+      {/* Timer */}
+      <div style={{
+        fontFamily:"'JetBrains Mono',monospace", fontSize:96, fontWeight:500,
+        color:phColor, lineHeight:1, letterSpacing:"0.04em",
+        marginBottom:20
+      }}>{fmt(T.tl)}</div>
+
+      {/* Description */}
+      <div style={{
+        fontSize:15, lineHeight:1.65, color:"#8B8BA0",
+        maxHeight:"22vh", overflowY:"auto",
+        background:"#17171F", borderRadius:14,
+        padding:"14px 18px",
+        border:"1px solid rgba(255,255,255,0.06)",
+        marginBottom:20
+      }}>{cur.d}</div>
+
+      {/* Controls */}
+      <div style={{display:"flex",gap:12,justifyContent:"flex-start"}}>
+        <button onClick={onPause} style={{
+          padding:"12px 24px", borderRadius:14, fontSize:15, fontWeight:700,
+          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+          background: T.run ? "rgba(255,109,31,0.15)" : "rgba(34,197,94,0.15)",
+          color: T.run ? "#FF8C47" : "#22C55E",
+          border: T.run ? "1px solid rgba(255,109,31,0.3)" : "1px solid rgba(34,197,94,0.3)",
+        }}>{T.run ? "⏸ Paus" : "▶ Fortsätt"}</button>
+        <button onClick={onSkip} style={{
+          padding:"12px 18px", borderRadius:14, fontSize:16, fontWeight:700,
+          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+          background:"#1E1E2A", color:"#8B8BA0",
+          border:"1px solid rgba(255,255,255,0.06)",
+        }}>⏭</button>
+        <button onClick={onStop} style={{
+          padding:"12px 18px", borderRadius:14, fontSize:16, fontWeight:700,
+          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+          background:"rgba(255,109,31,0.08)", color:"#FF6D1F",
+          border:"1px solid rgba(255,109,31,0.2)",
+        }}>⏹</button>
       </div>
     </div>
   );
