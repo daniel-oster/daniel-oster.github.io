@@ -9,9 +9,9 @@
   "theme_color": "#b5362a",
   "icons": [
     {
-      "src": "/pressless-logo.svg",
+      "src": "/pressless-logo.png",
       "sizes": "any",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
