@@ -330,7 +330,7 @@ export default function App() {
         sndRestSoon(ctx);
       } else if (bilateral && T.tl === Math.floor(cur.ws / 2)) {
         sndSwap(ctx);
-      } else if (T.tl > 5 && T.tl % 30 === 0 && cur.ws >= 60) {
+      } else if (!bilateral && T.tl > 5 && T.tl % 30 === 0 && cur.ws >= 60) {
         sndMid(ctx);
       }
     }
