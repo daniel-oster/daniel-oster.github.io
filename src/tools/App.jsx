@@ -1,5 +1,37 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+// ─── Audio ───────────────────────────────────────────────────
+function tone(ctx, freq, t0, dur, vol, type) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.connect(g); g.connect(ctx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime + t0);
+  g.gain.setValueAtTime(0, ctx.currentTime + t0);
+  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t0 + dur);
+  osc.start(ctx.currentTime + t0);
+  osc.stop(ctx.currentTime + t0 + dur + 0.05);
+}
+// Two punchy ascending beeps — "GO!"
+function sndGo(ctx) {
+  tone(ctx, 880,  0,    0.08, 0.4, 'square');
+  tone(ctx, 1100, 0.10, 0.12, 0.4, 'square');
+}
+// Soft descending tones — "rest"
+function sndRest(ctx) {
+  tone(ctx, 660, 0,    0.15, 0.3, 'sine');
+  tone(ctx, 440, 0.20, 0.25, 0.25,'sine');
+}
+// Gentle tick — end of prep countdown (last 5s before work starts)
+function sndPrepTick(ctx) { tone(ctx, 440, 0, 0.06, 0.18, 'sine'); }
+// Sharper tick — end of work countdown (last 5s before rest/next)
+function sndEndTick(ctx)  { tone(ctx, 700, 0, 0.06, 0.18, 'triangle'); }
+// Rising arpeggio — session complete
+function sndDone(ctx) {
+  [523, 659, 784, 1047].forEach((f, i) => tone(ctx, f, i * 0.13, 0.12, 0.3, 'sine'));
+}
+
 const css = `
 :root{
   --bg:#f7f5f1;--text:#2d2a26;--muted:#999;--faint:#bbb;
@@ -246,6 +278,15 @@ export default function App() {
   });
   const tRef = useRef(null);
   const aRef = useRef(null);
+  const audioRef = useRef(null);
+  const prevTRef = useRef(null);
+
+  function getCtx() {
+    if (!audioRef.current)
+      audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioRef.current.state === 'suspended') audioRef.current.resume();
+    return audioRef.current;
+  }
 
   useEffect(() => {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
@@ -283,6 +324,29 @@ export default function App() {
   useEffect(()=>{
     if(aRef.current) aRef.current.scrollIntoView({behavior:"smooth",block:"center"});
   },[T?.seqIdx,T?.phase]);
+
+  // Sound effect — fires on every timer state change
+  useEffect(() => {
+    const prev = prevTRef.current;
+    prevTRef.current = T;
+    // Session just finished
+    if (prev && !T) { try { sndDone(getCtx()); } catch(e) {} return; }
+    if (!T || !T.run) return;
+    // Phase transition
+    const phaseChanged = !prev || prev.phase !== T.phase;
+    if (phaseChanged) {
+      if (T.phase === 'work') { try { sndGo(getCtx());   } catch(e) {} return; }
+      if (T.phase === 'rest') { try { sndRest(getCtx()); } catch(e) {} return; }
+      return; // prep: silent, countdown ticks will play
+    }
+    // Countdown ticks in last 5 seconds
+    if (T.tl > 0 && T.tl <= 5) {
+      try {
+        if (T.phase === 'prep') sndPrepTick(getCtx());
+        else if (T.phase === 'work') sndEndTick(getCtx());
+      } catch(e) {}
+    }
+  }, [T]);
 
   function startDay(di) {
     const seq=buildSeq(WKS[wk].days[di]);
@@ -331,15 +395,19 @@ export default function App() {
       <style>{css}</style>
 
       <div style={{background:"linear-gradient(135deg,#8b2e1e,#b5362a 50%,#c44a3e)",padding:"24px 20px 18px",color:"white"}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:"0 0 4px",fontWeight:600}}>Träningsprogrammet</h1>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <img src="/pressless-logo.svg" alt="PressLess"
+              style={{width:44,height:44,borderRadius:10,objectFit:"contain",flexShrink:0}} />
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,margin:0,fontWeight:600}}>PressLess</h1>
+          </div>
           <button
             onClick={toggleDark}
             title={dark ? "Ljust tema" : "Mörkt tema"}
             style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"pointer",lineHeight:1,marginLeft:8,flexShrink:0}}
           >{dark ? "☀️" : "🌙"}</button>
         </div>
-        <p style={{margin:"0 0 10px",opacity:.8,fontSize:13}}>3 dagar/vecka · 4 veckor · med timer</p>
+        <p style={{margin:"4px 0 10px",opacity:.8,fontSize:13}}>3 dagar/vecka · 4 veckor · med timer</p>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {["🧱 Wall squats (BP)","🌿 Rörlighet","💪 Styrka"].map(t=>(<span key={t} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:"rgba(255,255,255,.15)"}}>{t}</span>))}
         </div>
