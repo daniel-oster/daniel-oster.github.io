@@ -250,10 +250,17 @@ export default function App() {
   const audioRef = useRef(null);
   const prevTRef = useRef(null);
 
+  // Must be called during a user gesture so the browser allows audio playback
+  function primeAudio() {
+    try {
+      if (!audioRef.current)
+        audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioRef.current.state === 'suspended') audioRef.current.resume();
+    } catch(e) {}
+  }
+
   function getCtx() {
-    if (!audioRef.current)
-      audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioRef.current.state === 'suspended') audioRef.current.resume();
+    primeAudio();
     return audioRef.current;
   }
 
@@ -301,6 +308,7 @@ export default function App() {
   }, [T]);
 
   function startDay(di) {
+    primeAudio();
     const seq=buildSeq(WKS[wk].days[di]);
     setT({dayIdx:di, seqIdx:0, phase:"work", tl:seq[0].ws, run:true, seq});
   }
@@ -319,8 +327,8 @@ export default function App() {
     });
   }
 
-  function pause(){setT(t=>t?{...t,run:!t.run}:null);}
-  function skip(){advance();}
+  function pause(){primeAudio();setT(t=>t?{...t,run:!t.run}:null);}
+  function skip(){primeAudio();advance();}
   function stop(){setT(null);}
 
   function activeFor(di,sec,si) {
