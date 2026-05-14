@@ -1,5 +1,48 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
+// ── Audio helpers ────────────────────────────────────────────────────────────
+function tone(ctx, freq, t0, dur, vol = 0.28, type = 'sine') {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  o.type = type;
+  o.frequency.setValueAtTime(freq, ctx.currentTime + t0);
+  g.gain.setValueAtTime(0, ctx.currentTime + t0);
+  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + t0 + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t0 + dur);
+  o.start(ctx.currentTime + t0);
+  o.stop(ctx.currentTime + t0 + dur + 0.05);
+}
+function sndReady(ctx) {   // 5 s before exercise — gentle rising bell
+  tone(ctx, 659, 0,    0.22, 0.18);
+  tone(ctx, 880, 0.28, 0.20, 0.14);
+}
+function sndGo(ctx) {      // exercise starts — bright C-E-G arpeggio
+  tone(ctx, 523, 0,    0.16, 0.22);
+  tone(ctx, 659, 0.14, 0.16, 0.22);
+  tone(ctx, 784, 0.28, 0.24, 0.26);
+}
+function sndRestSoon(ctx) { // 5 s before rest — soft descending
+  tone(ctx, 784, 0,    0.20, 0.16);
+  tone(ctx, 659, 0.26, 0.22, 0.13);
+}
+function sndRest(ctx) {    // rest starts — calming step down
+  tone(ctx, 659, 0,    0.28, 0.20);
+  tone(ctx, 523, 0.24, 0.32, 0.16);
+}
+function sndMid(ctx) {     // every 30 s — barely-there ping
+  tone(ctx, 523, 0, 0.14, 0.08, 'triangle');
+}
+function sndSwap(ctx) {    // switch sides — G-B lift
+  tone(ctx, 784, 0,    0.14, 0.22);
+  tone(ctx, 988, 0.18, 0.18, 0.20);
+}
+function sndDone(ctx) {    // session complete — rising fanfare
+  [523, 659, 784, 1047].forEach((f, i) =>
+    tone(ctx, f, i * 0.17, 0.24, 0.26)
+  );
+}
+
 const css = `
 *{box-sizing:border-box;}
 body{background:#0F0F14;margin:0;}
@@ -220,6 +263,8 @@ export default function App() {
   const [T, setT] = useState(null);
   const tRef = useRef(null);
   const aRef = useRef(null);
+  const audioRef = useRef(null);
+  const prevTRef = useRef(null);
 
   useEffect(() => {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
@@ -245,7 +290,54 @@ export default function App() {
     if(aRef.current) aRef.current.scrollIntoView({behavior:"smooth",block:"center"});
   },[T?.seqIdx,T?.phase]);
 
+  function primeAudio() {
+    try {
+      if (!audioRef.current)
+        audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioRef.current.state === 'suspended') audioRef.current.resume();
+    } catch(e) {}
+  }
+
+  useEffect(()=>{
+    const prev = prevTRef.current;
+    prevTRef.current = T;
+    const ctx = audioRef.current;
+    if (!ctx) return;
+
+    if (!T) {
+      if (prev) sndDone(ctx);
+      return;
+    }
+    if (!T.run) return;
+
+    const cur = T.seq[T.seqIdx];
+    const bilateral = cur.d?.includes('sek per sida');
+    const samePhase = prev && prev.seqIdx === T.seqIdx && prev.phase === T.phase;
+    const naturalTick = samePhase && T.run && prev.run && T.tl === prev.tl - 1;
+
+    if (!samePhase) {
+      if (T.phase === 'work') sndGo(ctx);
+      else if (T.phase === 'rest') sndRest(ctx);
+      return;
+    }
+
+    if (!naturalTick) return;
+
+    if (T.phase === 'prep' && T.tl === 5) {
+      sndReady(ctx);
+    } else if (T.phase === 'work') {
+      if (cur.rs > 0 && T.tl === 5) {
+        sndRestSoon(ctx);
+      } else if (bilateral && T.tl === Math.floor(cur.ws / 2)) {
+        sndSwap(ctx);
+      } else if (!bilateral && T.tl > 5 && T.tl % 30 === 0 && cur.ws >= 60) {
+        sndMid(ctx);
+      }
+    }
+  },[T]);
+
   function startDay(di) {
+    primeAudio();
     const seq=buildSeq(WKS[wk].days[di]);
     setT({dayIdx:di, seqIdx:0, phase:"work", tl:seq[0].ws, run:true, seq});
   }
@@ -264,7 +356,7 @@ export default function App() {
     });
   }
 
-  function pause(){setT(t=>t?{...t,run:!t.run}:null);}
+  function pause(){primeAudio(); setT(t=>t?{...t,run:!t.run}:null);}
   function skip(){advance();}
   function stop(){setT(null);}
 
