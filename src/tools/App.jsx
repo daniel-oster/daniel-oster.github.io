@@ -1,32 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-// ─── Audio ───────────────────────────────────────────────────
-function tone(ctx, freq, t0, dur, vol, type) {
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.connect(g); g.connect(ctx.destination);
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, ctx.currentTime + t0);
-  g.gain.setValueAtTime(0, ctx.currentTime + t0);
-  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t0 + dur);
-  osc.start(ctx.currentTime + t0);
-  osc.stop(ctx.currentTime + t0 + dur + 0.05);
-}
-function sndGo(ctx) {
-  tone(ctx, 880,  0,    0.08, 0.4, 'square');
-  tone(ctx, 1100, 0.10, 0.12, 0.4, 'square');
-}
-function sndRest(ctx) {
-  tone(ctx, 660, 0,    0.15, 0.3, 'sine');
-  tone(ctx, 440, 0.20, 0.25, 0.25,'sine');
-}
-function sndPrepTick(ctx) { tone(ctx, 440, 0, 0.06, 0.18, 'sine'); }
-function sndEndTick(ctx)  { tone(ctx, 700, 0, 0.06, 0.18, 'triangle'); }
-function sndDone(ctx) {
-  [523, 659, 784, 1047].forEach((f, i) => tone(ctx, f, i * 0.13, 0.12, 0.3, 'sine'));
-}
-
 const css = `
 *{box-sizing:border-box;}
 body{background:#0F0F14;margin:0;}
@@ -247,22 +220,6 @@ export default function App() {
   const [T, setT] = useState(null);
   const tRef = useRef(null);
   const aRef = useRef(null);
-  const audioRef = useRef(null);
-  const prevTRef = useRef(null);
-
-  // Must be called during a user gesture so the browser allows audio playback
-  function primeAudio() {
-    try {
-      if (!audioRef.current)
-        audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioRef.current.state === 'suspended') audioRef.current.resume();
-    } catch(e) {}
-  }
-
-  function getCtx() {
-    primeAudio();
-    return audioRef.current;
-  }
 
   useEffect(() => {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
@@ -288,27 +245,7 @@ export default function App() {
     if(aRef.current) aRef.current.scrollIntoView({behavior:"smooth",block:"center"});
   },[T?.seqIdx,T?.phase]);
 
-  useEffect(() => {
-    const prev = prevTRef.current;
-    prevTRef.current = T;
-    if (prev && !T) { try { sndDone(getCtx()); } catch(e) {} return; }
-    if (!T || !T.run) return;
-    const phaseChanged = !prev || prev.phase !== T.phase;
-    if (phaseChanged) {
-      if (T.phase === 'work') { try { sndGo(getCtx());   } catch(e) {} return; }
-      if (T.phase === 'rest') { try { sndRest(getCtx()); } catch(e) {} return; }
-      return;
-    }
-    if (T.tl > 0 && T.tl <= 5) {
-      try {
-        if (T.phase === 'prep') sndPrepTick(getCtx());
-        else if (T.phase === 'work') sndEndTick(getCtx());
-      } catch(e) {}
-    }
-  }, [T]);
-
   function startDay(di) {
-    primeAudio();
     const seq=buildSeq(WKS[wk].days[di]);
     setT({dayIdx:di, seqIdx:0, phase:"work", tl:seq[0].ws, run:true, seq});
   }
@@ -327,8 +264,8 @@ export default function App() {
     });
   }
 
-  function pause(){primeAudio();setT(t=>t?{...t,run:!t.run}:null);}
-  function skip(){primeAudio();advance();}
+  function pause(){setT(t=>t?{...t,run:!t.run}:null);}
+  function skip(){advance();}
   function stop(){setT(null);}
 
   function activeFor(di,sec,si) {
