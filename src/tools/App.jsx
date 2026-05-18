@@ -272,11 +272,14 @@ export default function App() {
     (async()=>{try{const r=await window.storage.get("wt4-ck");if(r?.value)setCk(JSON.parse(r.value));}catch(e){}setLoading(false);})();
   },[]);
 
-  // Orientation detection
+  // Orientation detection + resume AudioContext on rotate (mobile suspends it)
   useEffect(() => {
     const mq = window.matchMedia("(orientation: landscape)");
     setIsLandscape(mq.matches);
-    const handler = e => setIsLandscape(e.matches);
+    const handler = e => {
+      setIsLandscape(e.matches);
+      try { if (audioRef.current?.state === "suspended") audioRef.current.resume(); } catch(e) {}
+    };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -887,9 +890,7 @@ function LandscapeOverlay({T, onPause, onSkip, onStop}) {
     <div style={{
       position:"fixed", inset:0, zIndex:9999,
       background:"#0F0F14",
-      display:"flex", flexDirection:"column",
-      justifyContent:"center", alignItems:"stretch",
-      padding:"16px 32px",
+      display:"flex", flexDirection:"row",
       fontFamily:"'DM Sans',sans-serif",
     }}>
       {/* Progress bar at top */}
@@ -901,66 +902,76 @@ function LandscapeOverlay({T, onPause, onSkip, onStop}) {
         }}/>
       </div>
 
-      {/* Phase badge */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-        <span style={{
-          fontSize:13, fontWeight:700, padding:"5px 16px", borderRadius:20,
-          background:phBg, color:phColor,
-          border:`1px solid ${phBorder}`,
-          fontFamily:"'JetBrains Mono',monospace", letterSpacing:"0.12em"
-        }}>{c.emoji} {phLabel}</span>
-        {isPrep && (
-          <span style={{fontSize:13,color:"#9B65FF",fontWeight:500}}>
-            Läs och gör dig redo…
-          </span>
-        )}
+      {/* Left column — phase badge, name, timer, controls */}
+      <div style={{
+        display:"flex", flexDirection:"column", justifyContent:"center",
+        padding:"20px 24px 20px 28px", width:"48%", flexShrink:0,
+      }}>
+        {/* Phase badge */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <span style={{
+            fontSize:12, fontWeight:700, padding:"4px 14px", borderRadius:20,
+            background:phBg, color:phColor,
+            border:`1px solid ${phBorder}`,
+            fontFamily:"'JetBrains Mono',monospace", letterSpacing:"0.12em"
+          }}>{c.emoji} {phLabel}</span>
+        </div>
+
+        {/* Exercise name */}
+        <div style={{
+          fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:800,
+          color:"#F0EEF8", lineHeight:1.2, marginBottom:10,
+          letterSpacing:"-0.02em"
+        }}>{cur.name}</div>
+
+        {/* Timer */}
+        <div style={{
+          fontFamily:"'JetBrains Mono',monospace", fontSize:88, fontWeight:500,
+          color:phColor, lineHeight:1, letterSpacing:"0.04em",
+          marginBottom:16
+        }}>{fmt(T.tl)}</div>
+
+        {/* Controls */}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onPause} style={{
+            padding:"10px 20px", borderRadius:12, fontSize:14, fontWeight:700,
+            fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+            background: T.run ? "rgba(255,109,31,0.15)" : "rgba(34,197,94,0.15)",
+            color: T.run ? "#FF8C47" : "#22C55E",
+            border: T.run ? "1px solid rgba(255,109,31,0.3)" : "1px solid rgba(34,197,94,0.3)",
+          }}>{T.run ? "⏸ Paus" : "▶ Fortsätt"}</button>
+          <button onClick={onSkip} style={{
+            padding:"10px 16px", borderRadius:12, fontSize:15, fontWeight:700,
+            fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+            background:"#1E1E2A", color:"#8B8BA0",
+            border:"1px solid rgba(255,255,255,0.06)",
+          }}>⏭</button>
+          <button onClick={onStop} style={{
+            padding:"10px 16px", borderRadius:12, fontSize:15, fontWeight:700,
+            fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
+            background:"rgba(255,109,31,0.08)", color:"#FF6D1F",
+            border:"1px solid rgba(255,109,31,0.2)",
+          }}>⏹</button>
+        </div>
       </div>
 
-      {/* Exercise name */}
-      <div style={{
-        fontFamily:"'Syne',sans-serif", fontSize:36, fontWeight:800,
-        color:"#F0EEF8", lineHeight:1.15, marginBottom:16,
-        letterSpacing:"-0.02em"
-      }}>{cur.name}</div>
+      {/* Divider */}
+      <div style={{width:1,background:"rgba(255,255,255,0.06)",margin:"20px 0"}}/>
 
-      {/* Timer */}
+      {/* Right column — description */}
       <div style={{
-        fontFamily:"'JetBrains Mono',monospace", fontSize:96, fontWeight:500,
-        color:phColor, lineHeight:1, letterSpacing:"0.04em",
-        marginBottom:20
-      }}>{fmt(T.tl)}</div>
-
-      {/* Description */}
-      <div style={{
-        fontSize:15, lineHeight:1.65, color:"#8B8BA0",
-        maxHeight:"22vh", overflowY:"auto",
-        background:"#17171F", borderRadius:14,
-        padding:"14px 18px",
-        border:"1px solid rgba(255,255,255,0.06)",
-        marginBottom:20
-      }}>{cur.d}</div>
-
-      {/* Controls */}
-      <div style={{display:"flex",gap:12,justifyContent:"flex-start"}}>
-        <button onClick={onPause} style={{
-          padding:"12px 24px", borderRadius:14, fontSize:15, fontWeight:700,
-          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
-          background: T.run ? "rgba(255,109,31,0.15)" : "rgba(34,197,94,0.15)",
-          color: T.run ? "#FF8C47" : "#22C55E",
-          border: T.run ? "1px solid rgba(255,109,31,0.3)" : "1px solid rgba(34,197,94,0.3)",
-        }}>{T.run ? "⏸ Paus" : "▶ Fortsätt"}</button>
-        <button onClick={onSkip} style={{
-          padding:"12px 18px", borderRadius:14, fontSize:16, fontWeight:700,
-          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
-          background:"#1E1E2A", color:"#8B8BA0",
-          border:"1px solid rgba(255,255,255,0.06)",
-        }}>⏭</button>
-        <button onClick={onStop} style={{
-          padding:"12px 18px", borderRadius:14, fontSize:16, fontWeight:700,
-          fontFamily:"'DM Sans',sans-serif", cursor:"pointer",
-          background:"rgba(255,109,31,0.08)", color:"#FF6D1F",
-          border:"1px solid rgba(255,109,31,0.2)",
-        }}>⏹</button>
+        flex:1, overflowY:"auto",
+        padding:"24px 28px 24px 24px",
+        display:"flex", flexDirection:"column", justifyContent:"center",
+      }}>
+        {isPrep && (
+          <div style={{fontSize:13,color:"#9B65FF",fontWeight:500,marginBottom:10}}>
+            Läs och gör dig redo…
+          </div>
+        )}
+        <div style={{
+          fontSize:17, lineHeight:1.7, color:"#A0A0B8", fontWeight:400,
+        }}>{cur.d}</div>
       </div>
     </div>
   );
